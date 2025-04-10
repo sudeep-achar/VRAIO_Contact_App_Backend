@@ -1,16 +1,38 @@
-import {connectionPool} from '../db/dbHelper.js';
+import sequelize from "sequelize";
+import { Contacts, Email, PhoneNumber } from '../models/index.js';
+
 export async function getContacts(req, res) {
     try{
-    const connection = await connectionPool.getConnection();
-    const sql = 'call view_details()';
-    const queryResult = await connection.query(sql);
-    connection.release();
-    const result = queryResult[0][0];
-    const contactList = result.map((con) => {
-        con.phoneNumber = con.phoneNumber.split(",").map(Number);
-        con.email = con.email.split(",").map((email) => email.replaceAll('\"',  ''));
-        return con;
+    const result = await Contacts.findAll({
+        include: [
+          {
+            model: PhoneNumber,
+            attributes: ["phoneNumber"],
+          },
+          {
+            model: Email,
+            attributes: ["email"],
+          },
+        ],
+        attributes: {
+          include: [
+            [
+              sequelize.fn("DATE_FORMAT", sequelize.col("dob"), "%Y-%m-%d"),
+              "dob",
+            ],
+          ],
+          exclude: ["dob"],
+        },
       });
+    const contactList = result.map((con) => ({
+        id: con.contactId,
+        firstName: con.firstName,
+        lastName: con.lastName,
+        nickname: con.nickName,
+        dateOfBirth: con.dob,
+        phoneNumber: con.PhoneNumbers.map((p) => p.phoneNumber),
+        email: con.Emails.map((e) => e.email),
+      }));
     console.log(contactList);
     res.json(contactList);
     }catch(err){
@@ -19,51 +41,73 @@ export async function getContacts(req, res) {
     }
 }
 
-function onlyUnique(value, index, array) {
-    return array.indexOf(value) === index;
-  }
-
-export async function getContact(req, res) {
-    try{
-        const connection = await connectionPool.getConnection();
-        const sql = `call user_details(?)`;
-        const queryResult = await connection.query(sql, [req.params.id]);
-        connection.release();
-        const result = queryResult[0][0];
-        let user_d  = result[0];
-        if(user_d === undefined){
-            res.status(404).send("Contact not found");
-        }
-        user_d.number = result.map((item) => item.number).filter(onlyUnique);
-        user_d.email = result.map((item) => item.email).filter(onlyUnique);
-        console.log(user_d);
-        res.json(user_d);
-        }catch(err){
-            console.log(err);
-            res.status(500).send("Internal Server Error");
-        }
-}
 
 export async function upsertContact(req, res) {   
     try{
-        const connection = await connectionPool.getConnection();
-        const sql =`set @id = ?;
-        call upsert_contact(?, ?, ?, ?, ?, ?, @id);
-        select @id;`;
-        const queryResult = await connection.query(sql, 
-            [
-                req.body.id, 
-                req.body.firstName, 
-                req.body.lastName, 
-                req.body.nickname, 
-                req.body.dateOfBirth, 
-                JSON.stringify(req.body.phoneNumber),
-                JSON.stringify(req.body.email)
-            ]);
-        connection.release();
-        const result = queryResult[0][2];
-        console.log(result);
-        res.json(result);
+        if(!req.body.id) {
+            const con = await Contacts.create({
+                firstName: req.body.firstName,
+                lastName: req.body.lastName,
+                nickName: req.body.nickname,
+                dob: req.body.dateOfBirth,
+              });
+          
+              req.body.phoneNumber.map(
+                async (ph) =>
+                  await PhoneNumber.create({
+                    contactId: con.contactId,
+                    phoneNumber: ph,
+                  })
+              );
+          
+              req.body.email.map(
+                async (em) =>
+                  await Email.create({
+                    contactId: con.contactId,
+                    email: em,
+                  })
+              );
+                return res.json(con);
+        }
+        const con = await Contacts.findByPk(req.body.id);
+
+        con.update({
+          firstName: req.body.firstName,
+          lastName: req.body.lastName,
+          nickName: req.body.nickname,
+          dob: req.body.dateOfBirth,
+        });
+    
+        await PhoneNumber.destroy({
+          where: {
+            contactId: req.body.id,
+          },
+        });
+    
+        await Email.destroy({
+          where: {
+            contactId: req.body.id,
+          },
+        });
+    
+        req.body.phoneNumber.map(
+          async (ph) =>
+            await PhoneNumber.create({
+              contactId: req.body.id,
+              phoneNumber: ph,
+            })
+        );
+    
+        req.body.email.map(
+          async (em) =>
+            await Email.create({
+              contactId: req.body.id,
+              email: em,
+            })
+        );
+       
+        console.log(con);
+        res.json(con);
         }catch(err){
             console.log(err);
             res.status(500).send("Internal Server Error");
@@ -72,11 +116,11 @@ export async function upsertContact(req, res) {
 
 export async function deleteContact(req, res) {
     try{
-        const connection = await connectionPool.getConnection();
-        const sql = `call delete_contact(?)`;
-        const queryResult = await connection.query(sql, [req.params.id]);
-        connection.release();
-        const result = queryResult[0][0];
+        await Contacts.destroy({
+            where: {
+              contactId: req.params.id,
+            },
+          });
         res.json("Deleted");
         }catch(err){
             console.log(err);

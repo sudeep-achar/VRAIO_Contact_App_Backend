@@ -1,19 +1,24 @@
-import mysql from "mysql2/promise";
-import { dbConfig } from "./dbConfig.js";
+import { Sequelize } from "sequelize";
 
-const connectionPool = mysql.createPool({
-  ...dbConfig,
-  connectionLimit: 10,
+const sequelize = new Sequelize('contact_app_tables', 'root', 'root', {
+  host: 'localhost',
+  dialect: 'mysql',
+  pool: {
+    max: 10,
+    acquire: 60000,
+  },
 });
 
-async function checkConnection() {
-    return await connectionPool.getConnection(async (err, connection) => {
-      if (err) {
-        console.log("Error connecting to database: ", err);
-      } else {
-        console.log("Successfully connected to database.");
-      }
-      connection.release();
-    });
+function checkConnection() {
+  return new Promise((resolve, reject) => {
+    sequelize
+      .authenticate()
+      .then((_) => {
+        resolve();
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
 }
-export { connectionPool, checkConnection };
+export { sequelize, checkConnection };
