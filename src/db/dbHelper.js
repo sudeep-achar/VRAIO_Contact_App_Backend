@@ -1,6 +1,6 @@
 import { Sequelize } from "sequelize";
 
-const sequelize = new Sequelize('contact_app_tables', 'root', 'root', {
+const sequelize = new Sequelize('contact_app', 'root', 'root', {
   host: 'localhost',
   dialect: 'mysql',
   pool: {
@@ -12,7 +12,7 @@ const sequelize = new Sequelize('contact_app_tables', 'root', 'root', {
 function checkConnection() {
   return new Promise((resolve, reject) => {
     sequelize
-      .authenticate()
+      .authenticate() // database connection check
       .then((_) => {
         resolve();
       })

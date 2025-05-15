@@ -1,7 +1,7 @@
 import cors from 'cors'
 import express from 'express'
 import { getContacts,upsertContact, deleteContact } from './src/controller/contactController.js'
-import { Contacts, PhoneNumber, Email } from './src/models/index.js'
+import { Contacts } from './src/models/index.js'
 import { checkConnection, sequelize } from './src/db/dbHelper.js'
 const app = express()
 const port = 3000
